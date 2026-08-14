@@ -10,6 +10,18 @@ vars:
   MON_RELEASE: kube-prometheus-stack    # name MUST be this — Prometheus only watches
                                         # ServiceMonitors with label release: kube-prometheus-stack
 
+  # ── Pinned chart versions (confirmed latest as of 2026-08-14 — see README's
+  # "Pinned versions" section). Every helm install below uses --version
+  # explicitly so this stack behaves identically today and a month from now,
+  # instead of silently picking up whatever's newest in each repo at run time.
+  KUBE_PROMETHEUS_STACK_CHART_VERSION: 88.3.0   # deploys Grafana 13.1.3, Prometheus Operator v0.93.0
+  LOKI_CHART_VERSION: 7.3.0                     # Loki 3.6.12
+  TEMPO_CHART_VERSION: 1.24.4                   # Tempo 2.9.0
+  OTEL_COLLECTOR_CHART_VERSION: 0.169.0         # otelcol-contrib 0.158.0
+  ALLOY_CHART_VERSION: 1.11.1                   # Alloy v1.18.1
+  METALLB_CHART_VERSION: 0.16.1                 # MetalLB v0.16.1
+  KONG_CHART_VERSION: 3.4.1                     # Kong Gateway image pinned separately via KONG_IMAGE_TAG in .env
+
 dotenv: [".env"]
 
 tasks:
@@ -61,7 +73,8 @@ tasks:
   metallb:
     desc: "Install MetalLB so LoadBalancer Services get real IPs (no port-forward needed)"
     cmds:
-      - helm upgrade --install metallb metallb/metallb -n metallb-system --create-namespace --wait --timeout 3m
+      - helm upgrade --install metallb metallb/metallb -n metallb-system --create-namespace
+          --version {{.METALLB_CHART_VERSION}} --wait --timeout 3m
       - kubectl -n metallb-system wait --for=condition=available --timeout=90s deployment/metallb-controller
       - kubectl apply -f metallb-config.yaml
 
@@ -70,28 +83,33 @@ tasks:
     desc: "kube-prometheus-stack (Prometheus + Grafana + Operator) — release name MUST match MON_RELEASE"
     cmds:
       - helm upgrade --install {{.MON_RELEASE}} prometheus-community/kube-prometheus-stack
-          -n {{.MON_NS}} -f values-prometheus-stack.yaml --wait --timeout 5m
+          -n {{.MON_NS}} -f values-prometheus-stack.yaml
+          --version {{.KUBE_PROMETHEUS_STACK_CHART_VERSION}} --wait --timeout 5m
 
   loki:
     desc: "Loki — log store, native OTLP ingest"
     cmds:
-      - helm upgrade --install loki grafana/loki -n {{.MON_NS}} -f values-loki.yaml --wait --timeout 5m
+      - helm upgrade --install loki grafana/loki -n {{.MON_NS}} -f values-loki.yaml
+          --version {{.LOKI_CHART_VERSION}} --wait --timeout 5m
 
   tempo:
     desc: "Tempo — trace store"
     cmds:
-      - helm upgrade --install tempo grafana/tempo -n {{.MON_NS}} -f values-tempo.yaml --wait --timeout 5m
+      - helm upgrade --install tempo grafana/tempo -n {{.MON_NS}} -f values-tempo.yaml
+          --version {{.TEMPO_CHART_VERSION}} --wait --timeout 5m
 
   otel-collector:
     desc: "OTel Collector — Kong's OTLP traces+logs land here, tail-sampled to Tempo, forwarded to Loki"
     cmds:
       - helm upgrade --install otel-collector open-telemetry/opentelemetry-collector
-          -n {{.MON_NS}} -f values-otel-collector.yaml --wait --timeout 5m
+          -n {{.MON_NS}} -f values-otel-collector.yaml
+          --version {{.OTEL_COLLECTOR_CHART_VERSION}} --wait --timeout 5m
 
   alloy:
     desc: "Grafana Alloy — DaemonSet tailing Kong's raw pod stdout/stderr into Loki as {namespace=\"kong\"}"
     cmds:
-      - helm upgrade --install alloy grafana/alloy -n {{.MON_NS}} -f values-alloy.yaml --wait --timeout 5m
+      - helm upgrade --install alloy grafana/alloy -n {{.MON_NS}} -f values-alloy.yaml
+          --version {{.ALLOY_CHART_VERSION}} --wait --timeout 5m
 
   # ── Konnect + Kong DP ───────────────────────────────────────────────
   konnect-setup:
@@ -102,7 +120,8 @@ tasks:
   kong-dp-install:
     desc: "Install Kong DP (Konnect hybrid mode, image tag set via KONG_IMAGE_TAG in .env)"
     cmds:
-      - helm upgrade --install {{.KONG_RELEASE}} kong/kong -n {{.KONG_NS}} -f values-dp.yaml --wait --timeout 5m
+      - helm upgrade --install {{.KONG_RELEASE}} kong/kong -n {{.KONG_NS}} -f values-dp.yaml
+          --version {{.KONG_CHART_VERSION}} --wait --timeout 5m
 
   konnect-teardown:
     desc: "Delete the Konnect control plane created by konnect-setup"
@@ -125,6 +144,32 @@ tasks:
   # ── Kong config ──────────────────────────────────────────────────────
   deck-apply:
     desc: "Push service/route + prometheus/opentelemetry plugins via decK against Konnect"
+    cmds:
+      - |
+        deck gateway sync kong.yaml \
+          --konnect-addr "https://${KONNECT_SERVER_URL}" \
+          --konnect-token "${KONNECT_TOKEN}" \
+          --konnect-control-plane-name "${CONTROL_PLANE_NAME}"
+
+  body-capture-apply:
+    desc: "OPT-IN: apply request/response body capture on mock-service (see README 'Optional: request/response body capture')"
+    cmds:
+      - |
+        deck gateway sync kong-body-capture.yaml \
+          --konnect-addr "https://${KONNECT_SERVER_URL}" \
+          --konnect-token "${KONNECT_TOKEN}" \
+          --konnect-control-plane-name "${CONTROL_PLANE_NAME}"
+      - |
+        cat <<'EOF'
+        Body capture active on mock-service. Send a request with a JSON body, e.g.:
+          curl -X POST https://<proxy-ip>/mock/anything -H 'Content-Type: application/json' -d '{"marker":"test"}'
+        Then in Grafana Explore -> Loki, query (JSON bodies get flattened per-key, not one flat field):
+          {service_name="kong-gateway"} | request_body_marker != ``
+        Run 'task body-capture-revert' when done.
+        EOF
+
+  body-capture-revert:
+    desc: "Revert to the base kong.yaml (removes body capture, restores default state)"
     cmds:
       - |
         deck gateway sync kong.yaml \

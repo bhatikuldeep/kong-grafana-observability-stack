@@ -1,0 +1,84 @@
+# OPT-IN overlay — request/response body capture, NOT applied by default.
+#
+# See README.md "Not included: request/response body capture" for why this
+# isn't part of the base kong.yaml. Apply deliberately with `task
+# body-capture-apply`, scoped to mock-service/mock-route only (not global) —
+# treat body logging the way the guide itself does: a narrow, temporary
+# debugging tool, not a standing default.
+#
+# CONFIRMED LIVE (2026-08-14): for a JSON body, custom_attributes_by_lua
+# returns a parsed Lua table (per cjson.decode), and Loki's OTLP ingest
+# flattens it into individual dotted/underscored fields per key — NOT one
+# flat "request_body" string field. E.g. sending {"marker":"x"} produces
+# request_body_marker="x" on the log stream, not request_body="...". Query
+# with the actual flattened field name, e.g.
+# `{service_name="kong-gateway"} | request_body_marker != ""` — the more
+# generic `request_body != ""` pattern only matches non-JSON (plain-text or
+# unparseable) bodies, since those stay a single string field instead of
+# being flattened.
+#
+# decK sync treats this file as the FULL desired state, so it repeats
+# kong.yaml's service/route/prometheus block rather than being a partial
+# diff — `task body-capture-revert` syncs back to plain kong.yaml to remove
+# everything added here.
+_format_version: "3.0"
+
+services:
+  - name: mock-service
+    url: http://httpbin.konghq.com/anything
+    routes:
+      - name: mock-route
+        paths:
+          - /mock
+        strip_path: true
+
+plugins:
+  # ---- Metrics — unchanged from kong.yaml ----
+  - name: prometheus
+    config:
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true
+      per_consumer: false
+  # ---- Traces + access logs — same as base kong.yaml, PLUS the
+  # custom_attributes_by_lua fields the guide requires for bodies to reach
+  # the access log at all (plain set_serialize_value() additions are
+  # dropped by format_access_log() — this is the only way arbitrary fields
+  # survive).
+  - name: opentelemetry
+    service: mock-service
+    config:
+      traces_endpoint: http://otel-collector-opentelemetry-collector.observability.svc.cluster.local:4318/v1/traces
+      access_logs:
+        endpoint: http://otel-collector-opentelemetry-collector.observability.svc.cluster.local:4318/v1/logs
+        custom_attributes_by_lua:
+          request.body: "return kong.ctx.shared.req_body"
+          response.body: "return kong.ctx.shared.res_body"
+      resource_attributes:
+        service.name: kong-gateway
+
+  # ---- Body capture — scoped to mock-service only, not global ----
+  - name: pre-function
+    service: mock-service
+    config:
+      access:
+        - |
+          -- Buffer the response so its body is readable later, and grab the
+          -- request body now (get_raw_body() is illegal in the log phase).
+          kong.service.request.enable_buffering()
+          kong.ctx.shared.req_body_for_log = kong.request.get_raw_body()
+      log:
+        - |
+          local cjson = require("cjson.safe")
+
+          -- JSON if it parses, otherwise the raw string.
+          local function body_value(body)
+            if not body or body == "" then return nil end
+            return cjson.decode(body) or body
+          end
+
+          return function()
+            kong.ctx.shared.req_body = body_value(kong.ctx.shared.req_body_for_log)
+            kong.ctx.shared.res_body = body_value(kong.service.response.get_raw_body())
+          end

@@ -10,7 +10,7 @@ Spin up a local kind cluster with a real Konnect control plane, generate traffic
 - [Prerequisites](#prerequisites)
 - [Quick start](#quick-start)
 - [Kong Gateway version requirement](#kong-gateway-version-requirement)
-- [Not included: request/response body capture](#not-included-requestresponse-body-capture)
+- [Optional: request/response body capture](#optional-requestresponse-body-capture)
 - [Common pitfalls this reference avoids](#common-pitfalls-this-reference-avoids)
 - [Reproducing the missing-metrics symptom on demand](#reproducing-the-missing-metrics-symptom-on-demand)
 - [Useful tasks](#useful-tasks)
@@ -21,16 +21,19 @@ Spin up a local kind cluster with a real Konnect control plane, generate traffic
 
 ## What this sets up
 
-| Component | Role |
-|---|---|
-| Kong Gateway (Konnect hybrid data plane) | Proxies traffic. Exports metrics via the `prometheus` plugin; traces and structured access logs via the `opentelemetry` plugin |
-| OTel Collector | Receives Kong's OTLP traces and access logs, tail-samples traces, forwards to Tempo and Loki |
-| Grafana Alloy | DaemonSet tailing Kong's raw pod stdout/stderr (nginx error log, startup output) into Loki as a second, separate log stream |
-| Prometheus (kube-prometheus-stack) | Scrapes Kong's `/metrics` endpoint via a ServiceMonitor |
-| Loki | Stores logs — both the structured OTLP stream and Alloy's raw stdout stream |
-| Tempo | Stores traces, with metrics-generator enabled for TraceQL metrics queries and service graphs |
-| Grafana | Dashboards, with Loki ↔ Tempo trace/log correlation pre-configured |
-| MetalLB | Gives Services real IPs on the local kind cluster — no `kubectl port-forward` needed |
+Every chart and image below is pinned to an exact version — nothing installs "latest" at run time. Running `task up` today or a month from now installs the identical stack, instead of silently picking up whatever's newest in each Helm repo and potentially breaking on a schema change, deprecated field, or new default we haven't accounted for. All versions below are confirmed as the exact latest available as of 2026-08-14.
+
+| Component | Role | Version pinned |
+|---|---|---|
+| Kong Gateway (Konnect hybrid data plane) | Proxies traffic. Exports metrics via the `prometheus` plugin; traces and structured access logs via the `opentelemetry` plugin | `3.14.0.12` (image tag, `.env`) on chart `3.4.1` |
+| OTel Collector | Receives Kong's OTLP traces and access logs, tail-samples traces, forwards to Tempo and Loki | chart `0.169.0` → `otelcol-contrib` `0.158.0` |
+| Grafana Alloy | DaemonSet tailing Kong's raw pod stdout/stderr (nginx error log, startup output) into Loki as a second, separate log stream | chart `1.11.1` → Alloy `v1.18.1` |
+| Prometheus + Grafana (kube-prometheus-stack) | Prometheus scrapes Kong's `/metrics` endpoint via a ServiceMonitor. Grafana (bundled) gives dashboards, with Loki ↔ Tempo trace/log correlation pre-configured. Also installs the Prometheus Operator. | chart `88.3.0` → Grafana `13.1.3`, Prometheus Operator `v0.93.0` |
+| Loki | Stores logs — both the structured OTLP stream and Alloy's raw stdout stream | chart `7.3.0` → Loki `3.6.12` |
+| Tempo | Stores traces, with metrics-generator enabled for TraceQL metrics queries and service graphs | chart `1.24.4` → Tempo `2.9.0` |
+| MetalLB | Gives Services real IPs on the local kind cluster — no `kubectl port-forward` needed | `0.16.1` |
+
+Every chart version is set via a `*_CHART_VERSION` variable in `Taskfile.yaml` (Kong Gateway's image tag is `KONG_IMAGE_TAG` in `.env` instead). To intentionally move to a newer version later: update the relevant variable, then `task reset` to rebuild clean and re-run `task validate` before trusting it.
 
 ## Prerequisites
 
@@ -64,6 +67,8 @@ There are **two separate log streams in Loki** — querying the wrong one looks 
 
 **To see Alloy's raw log stream specifically:** Grafana → left sidebar → **Explore** → datasource dropdown (top left) → **Loki** → query field → `{namespace="kong"}` → Run query. Narrow further to one container with `{namespace="kong", container="proxy"}`. This is where you'd look for crashes, config-reload errors, or anything that isn't captured in a per-request access log — if a Kong pod is failing to start, this stream (not `{service_name="kong-gateway"}`) is where the error will show up.
 
+**This stream can be empty even when everything's healthy.** With `proxy_access_log: "off"` (the OTLP path handles per-request logging instead — see `values-dp.yaml.tpl`) and no errors occurring, Kong's proxy container writes almost nothing to stdout — confirmed live, even a `404` produces zero output. `{namespace="kong"}` only fills up on genuine events: pod startup/restart, config reload, or an actual runtime error. Don't read an empty result here as "Alloy is broken" — check `kubectl logs -n <namespace> <kong-pod> -c proxy --since=10m` directly first to confirm whether there's actually anything to tail.
+
 Both directions work here because `values-prometheus-stack.yaml` pre-configures them: a Derived Field on the Loki datasource (Loki → Tempo) and `tracesToLogsV2` on the Tempo datasource (Tempo → Loki). If you're wiring this up from scratch on your own Grafana instance, both need to be set up explicitly — see [Grafana's Loki derived fields docs](https://grafana.com/docs/grafana/latest/datasources/loki/configure-loki-data-source/) and [Tempo trace-to-logs docs](https://grafana.com/docs/grafana/latest/datasources/tempo/configure-tempo-data-source/configure-trace-to-logs/).
 
 > **The name matters.** kube-prometheus-stack must be installed with the Helm release name `kube-prometheus-stack` — this reference's `Taskfile.yaml` sets it via the `MON_RELEASE` variable, and everything downstream depends on it matching exactly. Prometheus only scrapes ServiceMonitors carrying the label `release: kube-prometheus-stack`, and Kong's chart is told to set exactly that label (`values-dp.yaml.tpl`'s `serviceMonitor.labels.release`). Rename one side without the other and Kong's metrics target silently never appears — no error anywhere, it just isn't there. If you're adapting this to your own setup and renaming the Prometheus release, update `serviceMonitor.labels.release` on the Kong side to match.
@@ -84,20 +89,34 @@ Set the version via `KONG_IMAGE_TAG` in `.env`. If you're troubleshooting a real
 kubectl exec -n <namespace> <kong-dp-pod> -c proxy -- kong version
 ```
 
-## Not included: request/response body capture
+## Optional: request/response body capture
 
-The `opentelemetry` plugin only captures request/response *metadata* by default (method, path, status, latency, etc.) — not the actual body content. Capturing bodies is possible but deliberately **not built into this reference**, for reference only if you need it later:
+The `opentelemetry` plugin only captures request/response *metadata* by default (method, path, status, latency, etc.) — not the actual body content. Capturing bodies is possible, and a **working, tested example is included** (`kong-body-capture.yaml`) — but it's **not part of the base `kong.yaml`** and must be applied deliberately:
 
-- `opentelemetry.config.custom_attributes_by_lua` — the only way to add arbitrary fields to the access log (plain `set_serialize_value()` additions are dropped).
+```bash
+task body-capture-apply    # applies pre-function + custom_attributes_by_lua to mock-service only
+# send a request with a body, e.g.:
+curl -X POST https://<proxy-ip>/mock/anything -H 'Content-Type: application/json' -d '{"marker":"test"}'
+task body-capture-revert   # removes it, restores the base kong.yaml state
+```
+
+It uses the same two pieces the guide describes:
+- `opentelemetry.config.access_logs.custom_attributes_by_lua` — the only way to add arbitrary fields to the access log (plain `set_serialize_value()` additions are dropped).
 - A `pre-function` plugin that calls `kong.service.request.enable_buffering()` and reads `kong.request.get_raw_body()` / `kong.service.response.get_raw_body()`, storing each as parsed JSON if it parses, otherwise the raw string.
 
-**Why this is left out here, not just an oversight:**
+**Confirmed live behaviour worth knowing:** for a JSON body, the captured value is a parsed Lua table, and Loki's OTLP ingest flattens it into individual fields per key — not one flat string field. Sending `{"marker":"test"}` produces a queryable field named `request_body_marker`, not `request_body`. Query with the actual flattened field name:
+```
+{service_name="kong-gateway"} | request_body_marker != ""
+```
+A generic `request_body != ""` filter only matches non-JSON bodies (plain text or anything that fails to parse), since those stay a single string field instead of being flattened.
+
+**Why this isn't in the base config, and isn't something to leave on by default:**
 - Ships every request/response body to Loki — bodies routinely contain passwords, tokens, PII, and pull your observability stack into GDPR/PCI/HIPAA compliance scope.
 - `enable_buffering()` disables response streaming — breaks SSE, large downloads, websockets.
 - Meaningfully increases Loki ingest volume and gateway memory/latency per request.
 - Doesn't handle binary or gzipped bodies — `get_raw_body()` returns them un-decoded, which shows up as garbage in the log.
 
-If you need this for a specific debugging session: scope both plugins to one route (not global), mask sensitive fields, keep retention short, and remove them when done.
+Use `task body-capture-apply` / `task body-capture-revert` as a scoped, temporary debugging cycle — it's already scoped to `mock-service` only, not global. For a real deployment: mask sensitive fields, keep retention short, and revert once you're done.
 
 ## Common pitfalls this reference avoids
 
@@ -137,6 +156,7 @@ task fix-servicemonitor-label     # restores it
 | `task grafana-password` | Prints the Grafana admin password |
 | `task down` / `task reset` | Tear down the kind cluster (`reset` also rebuilds). Does not delete the Konnect control plane. |
 | `task konnect-teardown` | Deletes the Konnect control plane created by `task konnect-setup` |
+| `task body-capture-apply` / `task body-capture-revert` | Apply/remove the [optional request/response body capture example](#optional-requestresponse-body-capture) on `mock-service` |
 
 ## In-cluster FQDNs
 

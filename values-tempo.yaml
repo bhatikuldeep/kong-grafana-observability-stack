@@ -1,0 +1,53 @@
+# Tempo — trace store. The Collector (values-otel-collector.yaml) does the
+# tail-based sampling and pushes here via OTLP gRPC on :4317.
+#
+# ⚠️ FOR TESTING/DEMO ONLY — NOT PRODUCTION CONFIG. persistence.enabled: false
+# below means traces are stored in a non-persistent emptyDir — they're lost
+# on every pod restart. This chart's own default storage.trace.backend is
+# already "local" (filesystem, /var/tempo/traces), which we're accepting
+# as-is rather than overriding. A production Tempo install needs
+# persistence.enabled: true with a real PVC/StorageClass AND almost
+# certainly a real object storage backend (S3/GCS/Azure) instead of local —
+# see https://grafana.com/docs/tempo/latest/configuration/#storage. Don't
+# copy this file as-is into a production values.yaml.
+#
+# Log-to-trace correlation works natively via Loki's structured trace_id
+# metadata (Grafana's built-in "Log details" panel) — no extra processor
+# needed for that.
+#
+# metrics-generator IS needed for Grafana's Tempo search view / Traces
+# Drilldown, which run TraceQL metrics queries (rate(), etc.) alongside
+# search results by default. Without it: "error finding generators: empty
+# ring". Three processors, each serving a different purpose:
+#   - service-graphs / span-metrics: feed Prometheus via remote_write
+#     (requires prometheus.prometheusSpec.enableRemoteWriteReceiver: true,
+#     already set in values-prometheus-stack.yaml)
+#   - local-blocks: required specifically for TraceQL metrics queries
+#     (rate(), quantile_over_time(), etc.) and Grafana's Traces Drilldown —
+#     without it: "localblocks processor not found". Writes trace blocks to
+#     local disk (chart default path), not to Prometheus.
+tempo:
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+        grpc:
+          endpoint: 0.0.0.0:4317
+  metricsGenerator:
+    enabled: true
+    remoteWriteUrl: "http://kube-prometheus-stack-prometheus.observability.svc.cluster.local:9090/api/v1/write"
+    processor:
+      local_blocks:
+        flush_to_storage: true
+        filter_server_spans: false
+        max_block_duration: 1m
+  overrides:
+    defaults:
+      metrics_generator:
+        processors:
+          - service-graphs
+          - span-metrics
+          - local-blocks
+persistence:
+  enabled: false   # ⚠️ testing/demo shortcut — see warning above, not for production

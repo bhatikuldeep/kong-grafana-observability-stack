@@ -1,0 +1,20 @@
+# NOTE: if you run multiple kind clusters on the same machine, they share
+# the same Docker "kind" bridge network. If LoadBalancer IPs collide with
+# another cluster's pool, change the address range below to a free block.
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: kong-observability-demo-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 192.168.156.100-192.168.156.130
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: kong-observability-demo-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - kong-observability-demo-pool

@@ -1,0 +1,32 @@
+_format_version: "3.0"
+
+services:
+  - name: mock-service
+    url: http://httpbin.konghq.com/anything
+    routes:
+      - name: mock-route
+        paths:
+          - /mock
+        strip_path: true
+
+plugins:
+  # ---- Metrics — scraped from the DP Status API by Prometheus ----
+  - name: prometheus
+    config:
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true
+      per_consumer: false
+
+  # ---- Traces + access logs — OTLP/HTTP to the in-cluster OTel Collector ----
+  # One plugin does both. access_logs.endpoint requires Kong Gateway 3.14+
+  # (the flat access_logs_endpoint field works from 3.13+) — see README.md
+  # "Kong Gateway version requirement" for details.
+  - name: opentelemetry
+    config:
+      traces_endpoint: http://otel-collector-opentelemetry-collector.observability.svc.cluster.local:4318/v1/traces
+      access_logs:
+        endpoint: http://otel-collector-opentelemetry-collector.observability.svc.cluster.local:4318/v1/logs
+      resource_attributes:
+        service.name: kong-gateway

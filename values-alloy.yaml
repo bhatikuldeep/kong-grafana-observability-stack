@@ -1,0 +1,78 @@
+# Grafana Alloy — DaemonSet tailing Kong's pod stdout/stderr (nginx access
+# and error logs written to the container's own log stream, separate from
+# the structured OTLP access logs the opentelemetry plugin sends directly
+# to the Collector) into Loki, as {namespace="kong"}.
+#
+# Uses loki.source.kubernetes (current recommended approach) rather than
+# the older loki.source.file + hostPath mount pattern — it tails via the
+# Kubernetes API directly, so no privileged container or /var/log/pods
+# mount is needed. discovery.kubernetes is scoped to this node only
+# (spec.nodeName), matching Grafana's own DaemonSet tutorial pattern —
+# without that scoping every Alloy pod would watch every pod cluster-wide.
+alloy:
+  configMap:
+    create: true
+    content: |
+      discovery.kubernetes "pods" {
+        role = "pod"
+
+        selectors {
+          role  = "pod"
+          field = "spec.nodeName=" + coalesce(sys.env("HOSTNAME"), constants.hostname)
+        }
+      }
+
+      discovery.relabel "kong_pod_logs" {
+        targets = discovery.kubernetes.pods.targets
+
+        // Only ship logs from pods in the "kong" namespace.
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          action        = "keep"
+          regex         = "kong"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          action        = "replace"
+          target_label  = "namespace"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          action        = "replace"
+          target_label  = "pod"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          action        = "replace"
+          target_label  = "container"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_container_name"]
+          action        = "replace"
+          separator     = "/"
+          target_label  = "job"
+        }
+      }
+
+      loki.source.kubernetes "kong_pod_logs" {
+        targets    = discovery.relabel.kong_pod_logs.output
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.write "default" {
+        endpoint {
+          url = "http://loki-gateway.observability.svc.cluster.local/loki/api/v1/push"
+        }
+      }
+
+controller:
+  type: daemonset
+
+# Default — grants the pods/pods-log/namespaces get/list/watch permissions
+# loki.source.kubernetes needs. No manual RBAC edits required.
+rbac:
+  create: true

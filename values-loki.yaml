@@ -1,0 +1,61 @@
+# Loki — native OTLP log ingest (otlphttp/loki -> .../otlp/v1/logs from the
+# OTel Collector).
+#
+# ⚠️ FOR TESTING/DEMO ONLY — NOT PRODUCTION CONFIG. This uses useTestSchema
+# (the chart's own testing shortcut, per its values.yaml comment: "for
+# testing or playing around") instead of a real schemaConfig. A production
+# Loki install MUST define its own explicit schemaConfig (store, object_store,
+# retention period, index prefix) — see
+# https://grafana.com/docs/loki/latest/configuration/#schema_config — and
+# almost certainly a real object storage backend (S3/GCS/Azure), not
+# filesystem. Don't copy this file as-is into a production values.yaml.
+#
+# IMPORTANT: don't set otlp_config.resource_attributes.ignore_defaults: true
+# without an explicit replacement list. Loki's OTLP endpoint requires every
+# log stream to have at least one label, and Loki's built-in default list
+# already promotes service.name (which kong.yaml sets via
+# resource_attributes.service.name) — overriding it with no replacement
+# causes every log stream to arrive with zero labels, and Loki rejects them
+# with HTTP 400 "at least one label pair is required per stream". Leaving
+# otlp_config unset (as below) uses the built-in defaults and works.
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  useTestSchema: true   # ⚠️ testing/demo shortcut — see warning above, not for production
+
+deploymentMode: SingleBinary
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: false
+  extraVolumes:
+    - name: var-loki
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: var-loki
+      mountPath: /var/loki
+
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+ruler:
+  enabled: false
+test:
+  enabled: false
+lokiCanary:
+  enabled: false
+minio:
+  enabled: false
+
+# The OTel Collector's exporter targets loki-gateway; the gateway chart
+# component fronts Loki with nginx and exposes the OTLP path cleanly.
+gateway:
+  enabled: true

@@ -1,0 +1,189 @@
+version: "3"
+
+vars:
+  CLUSTER: kong-observability-demo
+  KONG_NS: kong
+  MON_NS: observability
+  KONG_RELEASE: kong
+  KONG_SERVICEMONITOR: kong-kong        # Kong chart names its ServiceMonitor
+                                        # "<release>-<chart>" — not just the release name
+  MON_RELEASE: kube-prometheus-stack    # name MUST be this — Prometheus only watches
+                                        # ServiceMonitors with label release: kube-prometheus-stack
+
+dotenv: [".env"]
+
+tasks:
+  default:
+    cmds:
+      - task --list
+    silent: true
+
+  # ── Full lifecycle ──────────────────────────────────────────────────
+  up:
+    desc: "Bring up the full stack: cluster, Konnect CP/DP, observability, Kong config"
+    cmds:
+      - task: cluster
+      - task: metallb
+      - task: prometheus-stack
+      - task: loki
+      - task: tempo
+      - task: otel-collector
+      - task: alloy
+      - task: konnect-setup
+      - task: kong-dp-install
+      - task: deck-apply
+      - task: generate-traffic
+      - echo "Stack up. Run 'task urls' for access points, 'task validate' to check all signals."
+
+  down:
+    desc: "Tear down the kind cluster (does NOT delete the Konnect control plane)"
+    cmds:
+      - kind delete cluster --name {{.CLUSTER}}
+      - echo "Note - run 'task konnect-teardown' to also remove the Konnect control plane"
+
+  reset:
+    desc: "Tear down and rebuild from scratch"
+    cmds:
+      - task: down
+      - task: up
+
+  # ── Cluster + networking ────────────────────────────────────────────
+  cluster:
+    desc: "Create kind cluster and namespaces"
+    status:
+      - kind get clusters | grep -qx "{{.CLUSTER}}"
+    cmds:
+      - kind create cluster --name {{.CLUSTER}}
+      - kubectl config use-context kind-{{.CLUSTER}}
+      - kubectl create namespace {{.MON_NS}} --dry-run=client -o yaml | kubectl apply -f -
+      - kubectl create namespace {{.KONG_NS}} --dry-run=client -o yaml | kubectl apply -f -
+
+  metallb:
+    desc: "Install MetalLB so LoadBalancer Services get real IPs (no port-forward needed)"
+    cmds:
+      - helm upgrade --install metallb metallb/metallb -n metallb-system --create-namespace --wait --timeout 3m
+      - kubectl -n metallb-system wait --for=condition=available --timeout=90s deployment/metallb-controller
+      - kubectl apply -f metallb-config.yaml
+
+  # ── Observability stack ─────────────────────────────────────────────
+  prometheus-stack:
+    desc: "kube-prometheus-stack (Prometheus + Grafana + Operator) — release name MUST match MON_RELEASE"
+    cmds:
+      - helm upgrade --install {{.MON_RELEASE}} prometheus-community/kube-prometheus-stack
+          -n {{.MON_NS}} -f values-prometheus-stack.yaml --wait --timeout 5m
+
+  loki:
+    desc: "Loki — log store, native OTLP ingest"
+    cmds:
+      - helm upgrade --install loki grafana/loki -n {{.MON_NS}} -f values-loki.yaml --wait --timeout 5m
+
+  tempo:
+    desc: "Tempo — trace store"
+    cmds:
+      - helm upgrade --install tempo grafana/tempo -n {{.MON_NS}} -f values-tempo.yaml --wait --timeout 5m
+
+  otel-collector:
+    desc: "OTel Collector — Kong's OTLP traces+logs land here, tail-sampled to Tempo, forwarded to Loki"
+    cmds:
+      - helm upgrade --install otel-collector open-telemetry/opentelemetry-collector
+          -n {{.MON_NS}} -f values-otel-collector.yaml --wait --timeout 5m
+
+  alloy:
+    desc: "Grafana Alloy — DaemonSet tailing Kong's raw pod stdout/stderr into Loki as {namespace=\"kong\"}"
+    cmds:
+      - helm upgrade --install alloy grafana/alloy -n {{.MON_NS}} -f values-alloy.yaml --wait --timeout 5m
+
+  # ── Konnect + Kong DP ───────────────────────────────────────────────
+  konnect-setup:
+    desc: "Create a real Konnect control plane + DP client cert, write values-dp.yaml"
+    cmds:
+      - bash konnect-setup.sh
+
+  kong-dp-install:
+    desc: "Install Kong DP (Konnect hybrid mode, image tag set via KONG_IMAGE_TAG in .env)"
+    cmds:
+      - helm upgrade --install {{.KONG_RELEASE}} kong/kong -n {{.KONG_NS}} -f values-dp.yaml --wait --timeout 5m
+
+  konnect-teardown:
+    desc: "Delete the Konnect control plane created by konnect-setup"
+    cmds:
+      - |
+        CP_ID=$(python3 -c 'import json;print(json.load(open("certs/control-plane.json"))["id"])')
+        echo "Deleting Konnect control plane $CP_ID ..."
+        curl -sS -X DELETE "https://${KONNECT_SERVER_URL}/v2/control-planes/$CP_ID" \
+          -H "Authorization: Bearer ${KONNECT_TOKEN}" --fail-with-body
+        rm -f certs/control-plane.json certs/dp-cert-upload.json
+
+  konnect-nodes:
+    desc: "Check DP connection/sync status against the real Konnect control plane"
+    cmds:
+      - |
+        CP_ID=$(python3 -c 'import json;print(json.load(open("certs/control-plane.json"))["id"])')
+        curl -sS "https://${KONNECT_SERVER_URL}/v2/control-planes/$CP_ID/nodes" \
+          -H "Authorization: Bearer ${KONNECT_TOKEN}" | python3 -m json.tool
+
+  # ── Kong config ──────────────────────────────────────────────────────
+  deck-apply:
+    desc: "Push service/route + prometheus/opentelemetry plugins via decK against Konnect"
+    cmds:
+      - |
+        deck gateway sync kong.yaml \
+          --konnect-addr "https://${KONNECT_SERVER_URL}" \
+          --konnect-token "${KONNECT_TOKEN}" \
+          --konnect-control-plane-name "${CONTROL_PLANE_NAME}"
+
+  # ── Traffic + validation ────────────────────────────────────────────
+  generate-traffic:
+    desc: "Send test traffic through the DP's proxy Service (direct MetalLB IP, no port-forward)"
+    cmds:
+      - |
+        PROXY_IP=$(kubectl -n {{.KONG_NS}} get svc {{.KONG_RELEASE}}-kong-proxy -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        for i in $(seq 1 10); do curl -sk -o /dev/null -w "%{http_code} " "https://${PROXY_IP}/mock/anything"; sleep 0.3; done
+        echo
+
+  validate:
+    desc: "Check all three signals end-to-end via each backend's own API"
+    cmds:
+      - bash validate.sh {{.MON_NS}}
+
+  urls:
+    desc: "Print direct IPs for Grafana/Prometheus/Kong proxy (MetalLB, no port-forward)"
+    cmds:
+      - 'echo "Grafana:    http://$(kubectl -n {{.MON_NS}} get svc {{.MON_RELEASE}}-grafana -o jsonpath="{.status.loadBalancer.ingress[0].ip}")  (admin / see: task grafana-password)"'
+      - 'echo "Prometheus: http://$(kubectl -n {{.MON_NS}} get svc {{.MON_RELEASE}}-prometheus -o jsonpath="{.status.loadBalancer.ingress[0].ip}"):9090"'
+      - 'echo "Kong proxy: https://$(kubectl -n {{.KONG_NS}} get svc {{.KONG_RELEASE}}-kong-proxy -o jsonpath="{.status.loadBalancer.ingress[0].ip}")"'
+
+  grafana-password:
+    desc: "Get the Grafana admin password"
+    cmds:
+      - kubectl -n {{.MON_NS}} get secret {{.MON_RELEASE}}-grafana -o jsonpath="{.data.admin-password}" | base64 --decode
+      - echo
+
+  status:
+    desc: "Quick health check across all components"
+    cmds:
+      - 'echo "--- kong ---"; kubectl -n {{.KONG_NS}} get pods'
+      - 'echo "--- observability ---"; kubectl -n {{.MON_NS}} get pods'
+      - 'echo "--- servicemonitors ---"; kubectl get servicemonitor -A'
+      - 'echo "--- konnect DP status ---"'
+      - task: konnect-nodes
+
+  # ── Diagnosis helpers — reproduce the missing-metrics symptom on demand ──
+  break-servicemonitor-label:
+    desc: "Remove the release label from Kong's ServiceMonitor — reproduces the missing-metrics symptom"
+    cmds:
+      - kubectl -n {{.KONG_NS}} label servicemonitor {{.KONG_SERVICEMONITOR}} release-
+      - echo "Label removed. Run 'task validate' — metrics target should now be ABSENT."
+
+  fix-servicemonitor-label:
+    desc: "Restore the release label (durable fix belongs in values-dp.yaml's serviceMonitor.labels)"
+    cmds:
+      - kubectl -n {{.KONG_NS}} label servicemonitor {{.KONG_SERVICEMONITOR}} release={{.MON_RELEASE}} --overwrite
+      - echo "Label restored. Wait ~1 scrape cycle, then 'task validate'."
+
+  check-kong-version:
+    desc: "Confirm the ACTUAL running Kong Gateway version (not just the image tag we set)"
+    cmds:
+      - |
+        POD=$(kubectl -n {{.KONG_NS}} get pod -l app.kubernetes.io/name=kong -o jsonpath='{.items[0].metadata.name}')
+        kubectl -n {{.KONG_NS}} exec "$POD" -c proxy -- kong version

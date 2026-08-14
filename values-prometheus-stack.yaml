@@ -1,0 +1,62 @@
+# kube-prometheus-stack values — bundles Prometheus + Grafana + the
+# Prometheus Operator, plus Grafana datasources for trace/log correlation.
+#
+# IMPORTANT: this Helm release MUST be named "kube-prometheus-stack" (see
+# Taskfile.yaml's MON_RELEASE var) — the Kong Gateway chart's ServiceMonitor
+# sets label release: kube-prometheus-stack, and Prometheus only watches
+# ServiceMonitors carrying that exact label.
+
+prometheus:
+  service:
+    type: LoadBalancer
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector:
+      matchLabels:
+        release: kube-prometheus-stack
+    enableRemoteWriteReceiver: true   # accept Tempo's span RED metrics
+
+alertmanager:
+  enabled: false
+
+grafana:
+  service:
+    type: LoadBalancer
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://loki-gateway.observability.svc.cluster.local
+      jsonData:
+        # Loki → Tempo: trace_id is OTLP structured metadata, matched as a label.
+        # NOTE: $${...} (double dollar) is required here, not ${...} — Helm's
+        # chart templating consumes a single $, and the literal Grafana
+        # template variable never reaches Grafana. A single $ silently
+        # renders this as an empty string instead of the trace ID.
+        derivedFields:
+          - name: trace_id
+            matcherType: label
+            matcherRegex: trace_id
+            url: '$${__value.raw}'
+            datasourceUid: tempo
+            urlDisplayLabel: 'View trace'
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      access: proxy
+      url: http://tempo.observability.svc.cluster.local:3200
+      jsonData:
+        # Tempo → Loki: find the access-log line(s) for a span by trace id.
+        # Same $${...} escaping requirement as above.
+        tracesToLogsV2:
+          datasourceUid: loki
+          spanStartTimeShift: '-1h'
+          spanEndTimeShift: '1h'
+          filterByTraceID: false
+          customQuery: true
+          query: '{service_name="kong-gateway"} | trace_id=`$${__trace.traceId}`'
+        serviceMap:
+          datasourceUid: prometheus
+        nodeGraph:
+          enabled: true

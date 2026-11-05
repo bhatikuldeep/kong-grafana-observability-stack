@@ -67,4 +67,3 @@ envsubst '${KONG_IMAGE_TAG} ${CONTROL_PLANE_ENDPOINT} ${CONTROL_PLANE_TELEMETRY}
 
 echo ""
 echo "values-dp.yaml written (Kong Gateway ${KONG_IMAGE_TAG}). Control plane ID: ${CONTROL_PLANE_ID}"
-echo "Next: task kong-dp-install"

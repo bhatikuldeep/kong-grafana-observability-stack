@@ -5,31 +5,67 @@
 When errors climb on a Kong route, a metric tells you *that* something broke. To see *why*, you need the request's log line and its trace. This repository wires all three from a Kong Gateway data plane (Konnect hybrid mode, on Kubernetes) into one Grafana:
 
 - **Metrics:** the `prometheus` plugin, scraped by Prometheus, shown on Kong's official dashboard ([7424](https://grafana.com/grafana/dashboards/7424-kong-official/)).
-- **Traces and access logs:** the `opentelemetry` plugin, sent over OTLP to an OpenTelemetry Collector, stored in Tempo and Loki. Each log line links to its trace, and back.
+- **Traces and access logs:** the `opentelemetry` plugin sends both over OTLP to an OpenTelemetry Collector, which stores them in Tempo and Loki. Each log line links to its trace, and back.
 - **Container logs:** Grafana Alloy ships the Kong pods' stdout and stderr to Loki, for startup errors and crashes.
 
 ```mermaid
 flowchart LR
-  client([Client]) --> dp[Kong data plane]
-  cp[Konnect control plane] -. config .-> dp
-  dp --> up([Upstream])
-  dp -- "/metrics on :8100" --> prom[(Prometheus)]
-  dp -- "OTLP traces + access logs" --> col[OTel Collector]
-  col -- traces --> tempo[(Tempo)]
-  col -- access logs --> loki[(Loki)]
-  dp -. "container stdout/stderr" .-> alloy[Grafana Alloy] --> loki
-  prom --> graf[Grafana]
-  tempo --> graf
-  loki --> graf
+  konnect["Konnect<br/>control plane"]
+
+  subgraph kong["Kong Gateway data plane"]
+    direction TB
+    promplugin["prometheus plugin"]
+    otelplugin["opentelemetry plugin"]
+    stdout["container<br/>stdout / stderr"]
+  end
+
+  subgraph collect["Collect"]
+    direction TB
+    collector["OpenTelemetry<br/>Collector"]
+    alloy["Grafana Alloy"]
+  end
+
+  subgraph store["Store"]
+    direction TB
+    prometheus[("Prometheus")]
+    tempo[("Tempo")]
+    loki[("Loki")]
+  end
+
+  grafana["Grafana<br/>Kong dashboard"]
+
+  konnect -. "config" .-> kong
+  promplugin -- "scrape :8100/metrics" --> prometheus
+  otelplugin -- "OTLP traces" --> collector
+  otelplugin -- "OTLP access logs" --> collector
+  stdout -- "Kubernetes API" --> alloy
+  collector -- "traces" --> tempo
+  collector -- "access logs" --> loki
+  alloy -- "container logs" --> loki
+  prometheus --> grafana
+  tempo --> grafana
+  loki --> grafana
+  loki <-. "trace_id" .-> tempo
+
+  classDef kongnode fill:#e6fff5,stroke:#00a86b,color:#0b2e20
+  classDef pipe fill:#eef2ff,stroke:#5b6bd6,color:#1e255e
+  classDef db fill:#fff7e6,stroke:#d9a400,color:#4a3600
+  classDef ui fill:#fdeeee,stroke:#d9534f,color:#4a1514
+  classDef ext fill:#f5f5f5,stroke:#888,color:#222
+  class promplugin,otelplugin,stdout kongnode
+  class collector,alloy pipe
+  class prometheus,tempo,loki db
+  class grafana ui
+  class konnect ext
 ```
 
-Everything runs on a kind cluster, with every chart and image pinned. One command stands it up.
+Everything runs on a kind cluster, with every chart and image pinned.
 
 ## Prerequisites
 
-- Docker, [kind](https://kind.sigs.k8s.io), `kubectl`, `helm`, [`task`](https://taskfile.dev) and [decK](https://github.com/Kong/deck)
+- Docker with about 4 GB of memory free (the kind node uses about 4 GB once everything runs)
+- [kind](https://kind.sigs.k8s.io), `kubectl`, `helm`, [`task`](https://taskfile.dev) and [decK](https://github.com/Kong/deck)
 - A Konnect account and a [personal access token](https://cloud.konghq.com/global/account/tokens)
-- About 4 GB of memory for Docker: the kind node uses about 4 GB once everything runs
 
 ## Getting started
 
@@ -39,19 +75,17 @@ cd kong-grafana-observability-stack
 cp .env.example .env
 # set KONNECT_TOKEN, and KONNECT_SERVER_URL if your Konnect region isn't EU
 
-task up         # cluster, observability stack, Konnect control plane,
-                # Kong data plane, Kong config and some test traffic
-task validate   # checks that metrics, traces and both log streams arrived
-task urls       # Grafana, Prometheus and Kong proxy addresses
+task up      # cluster, observability stack, Konnect control plane, Kong data plane
+task test    # sends traffic, checks metrics, traces and both log streams arrived
 ```
 
-If your machine can't reach the addresses from `task urls` (some Docker setups don't route to kind's network), forward Grafana instead:
+Both commands end by printing the Grafana address and login. If your machine can't reach that address (some Docker setups don't route to kind's network), forward Grafana instead and open http://localhost:3000:
 
 ```bash
 kubectl -n observability port-forward svc/kube-prometheus-stack-grafana 3000:80
 ```
 
-Log in as `admin`, with the password from `task grafana-password`. Then:
+In Grafana:
 
 1. **Dashboards > Kong > Kong (official)** for request rate, status codes and latency per service and route.
 2. **Explore > Loki**, query `{service_name="kong-gateway"}`, expand a line and select **View trace**.
@@ -60,8 +94,8 @@ Log in as `admin`, with the password from `task grafana-password`. Then:
 When you're done:
 
 ```bash
-task down               # deletes the kind cluster
-task konnect-teardown   # deletes the Konnect control plane
+task down    # deletes the kind cluster, keeps the Konnect control plane
+task clean   # deletes the cluster and the Konnect control plane
 ```
 
 ## Reference
@@ -78,19 +112,7 @@ task konnect-teardown   # deletes the Konnect control plane
 | Grafana Alloy | chart 1.15.0: Alloy 1.21.3 |
 | MetalLB | chart 0.16.2 |
 
-Chart versions are set in `Taskfile.yaml`. To upgrade, change a version, then run `task reset` and `task validate`.
-
-### Tasks
-
-| Task | What it does |
-|---|---|
-| `task status` | Pods, ServiceMonitors and the data plane's Konnect connection |
-| `task check-kong-version` | The Kong version actually running in the pod |
-| `task break-servicemonitor-label` / `task fix-servicemonitor-label` | Reproduce and fix the "no Kong metrics" problem |
-| `task body-capture-apply` / `task body-capture-revert` | Add request and response bodies to the access log for `mock-service`, then remove them |
-| `task reset` | Delete and rebuild the cluster |
-
-`task --list` shows all of them.
+Chart versions are set in `Taskfile.yaml`. To upgrade, change a version, then run `task down`, `task up` and `task test`.
 
 ### Troubleshooting
 
@@ -98,10 +120,29 @@ Chart versions are set in `Taskfile.yaml`. To upgrade, change a version, then ru
 |---|---|
 | No Kong target in Prometheus, and no error | The ServiceMonitor must carry `release: kube-prometheus-stack`, the label this Prometheus selects on (`values-dp.yaml.tpl`). |
 | Dashboard shows `kong-kong-proxy` as the only service | Prometheus replaced Kong's `service` label with the Kubernetes Service name. `honorLabels: true` on the ServiceMonitor keeps Kong's. |
-| Traces arrive, access logs don't | OTLP access logs need Kong Gateway 3.13 or later (`access_logs.endpoint` from 3.14). Check with `task check-kong-version`. |
+| Traces arrive, access logs don't | OTLP access logs need Kong Gateway 3.13 or later (`access_logs.endpoint` from 3.14). Check what runs: `kubectl -n kong exec deploy/kong-kong -c proxy -- kong version` |
 | Kong exports fine but Loki or Tempo is empty | Kong only sees the Collector's reply. Read the Collector's logs: `kubectl logs -n observability -l app.kubernetes.io/name=opentelemetry-collector` |
 | "View trace" opens an empty trace ID | Grafana expands `$VAR` in provisioning files, so link variables are escaped as `$${...}` in `values-prometheus-stack.yaml`. |
 | `{namespace="kong"}` is empty | Normal on a healthy gateway: request logs go over OTLP and `proxy_access_log` is off. This stream fills on startup, reloads and errors. |
+
+### Request and response bodies (optional)
+
+`kong-body-capture.yaml` adds bodies to the access log for `mock-service` only. Apply it, and switch back to `kong.yaml` when done:
+
+```bash
+set -a; . ./.env; set +a
+deck gateway sync kong-body-capture.yaml \
+  --konnect-addr "https://$KONNECT_SERVER_URL" \
+  --konnect-token "$KONNECT_TOKEN" \
+  --konnect-control-plane-name "$CONTROL_PLANE_NAME"
+# ...and back:
+deck gateway sync kong.yaml \
+  --konnect-addr "https://$KONNECT_SERVER_URL" \
+  --konnect-token "$KONNECT_TOKEN" \
+  --konnect-control-plane-name "$CONTROL_PLANE_NAME"
+```
+
+Loki flattens a JSON body into one field per key: `{"marker":"x"}` becomes `request_body_marker`.
 
 ### Before production
 

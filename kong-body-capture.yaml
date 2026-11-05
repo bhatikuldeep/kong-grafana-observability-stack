@@ -1,6 +1,6 @@
 # OPT-IN overlay: request and response bodies in the access log, for
-# mock-service only. Not applied by default. Apply with
-# `task body-capture-apply`, remove with `task body-capture-revert`.
+# mock-service only. Not applied by default. See README "Reference" for the
+# deck commands that apply it and switch back to kong.yaml.
 # Bodies can hold tokens and personal data, so use it on one route, briefly.
 #
 # A JSON body is parsed (cjson) and Loki's OTLP ingest flattens it into one

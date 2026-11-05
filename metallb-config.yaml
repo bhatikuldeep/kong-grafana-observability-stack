@@ -1,4 +1,4 @@
-# Rendered by `task metallb`: ${METALLB_RANGE} is a block near the top of the
+# Rendered by `task up`: ${METALLB_RANGE} is a block near the top of the
 # Docker "kind" network's IPv4 subnet (for 192.168.107.0/24: .200-.230), so
 # LoadBalancer IPs sit on the same network as the kind node. To pick another
 # block (another kind cluster's pool uses it), set METALLB_RANGE in .env.

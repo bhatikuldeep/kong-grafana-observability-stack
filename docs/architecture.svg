@@ -1,117 +1,117 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1220 930" width="1220" height="930" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif">
   <style>
-    .kof-bg { fill: var(--theme, #f6f6f3); }
-    .kof-box { fill: var(--entry, #ffffff); stroke: var(--border-strong, #c9c9c2); stroke-width: 1.5; }
-    .kof-dp { fill: var(--accent-soft, rgba(0, 245, 160, 0.14)); stroke: var(--accent, #007a52); stroke-width: 1.5; }
-    .kof-plugin { fill: var(--entry, #ffffff); stroke: var(--accent, #007a52); stroke-width: 1.5; }
-    .kof-pipe { fill: rgba(99, 102, 241, 0.10); stroke: #6366f1; stroke-width: 1.5; }
-    .kof-cp { fill: var(--entry, #ffffff); stroke: var(--border-strong, #c9c9c2); stroke-width: 1.5; stroke-dasharray: 6 5; }
-    .kof-t { fill: var(--primary, #111418); font-size: 22px; font-weight: 600; text-anchor: middle; }
-    .kof-s { fill: var(--secondary, #4a4f57); font-size: 17px; text-anchor: middle; }
-    .kof-ta { fill: var(--accent, #007a52); font-size: 23px; font-weight: 600; text-anchor: middle; }
-    .kof-tp { fill: #4f46e5; font-size: 22px; font-weight: 600; text-anchor: middle; }
-    .kof-l { fill: var(--secondary, #4a4f57); font-size: 16px; }
-    .kof-line { fill: none; stroke: var(--muted, #5a5f68); stroke-width: 1.8; }
-    .kof-req { fill: none; stroke: var(--primary, #111418); stroke-width: 2.6; }
-    .kof-otlp { fill: none; stroke: #6366f1; stroke-width: 2; }
-    .kof-dash { fill: none; stroke: var(--muted, #5a5f68); stroke-width: 1.8; stroke-dasharray: 6 5; }
-    .kof-scrape { fill: none; stroke: var(--accent, #007a52); stroke-width: 2; stroke-dasharray: 6 5; }
-    .dark .kof-pipe { fill: rgba(129, 140, 248, 0.14); stroke: #818cf8; }
-    .dark .kof-tp { fill: #a5b4fc; }
-    .dark .kof-otlp { stroke: #818cf8; }
+    .kbd-bg { fill: var(--entry, #ffffff); }
+    .kbd-box { fill: var(--entry, #ffffff); stroke: var(--border-strong, #c9c9c2); stroke-width: 1.5; }
+    .kbd-dp { fill: var(--accent-soft, rgba(0, 245, 160, 0.14)); stroke: var(--accent, #007a52); stroke-width: 1.5; }
+    .kbd-plugin { fill: var(--entry, #ffffff); stroke: var(--accent, #007a52); stroke-width: 1.5; }
+    .kbd-pipe { fill: rgba(99, 102, 241, 0.10); stroke: #6366f1; stroke-width: 1.5; }
+    .kbd-cp { fill: var(--entry, #ffffff); stroke: var(--border-strong, #c9c9c2); stroke-width: 1.5; stroke-dasharray: 6 5; }
+    .kbd-t { fill: var(--primary, #111418); font-size: 22px; font-weight: 600; text-anchor: middle; }
+    .kbd-s { fill: var(--secondary, #4a4f57); font-size: 17px; text-anchor: middle; }
+    .kbd-ta { fill: var(--accent, #007a52); font-size: 23px; font-weight: 600; text-anchor: middle; }
+    .kbd-tp { fill: #4f46e5; font-size: 22px; font-weight: 600; text-anchor: middle; }
+    .kbd-l { fill: var(--secondary, #4a4f57); font-size: 16px; }
+    .kbd-line { fill: none; stroke: var(--muted, #5a5f68); stroke-width: 1.8; }
+    .kbd-req { fill: none; stroke: var(--primary, #111418); stroke-width: 2.6; }
+    .kbd-otlp { fill: none; stroke: #6366f1; stroke-width: 2; }
+    .kbd-dash { fill: none; stroke: var(--muted, #5a5f68); stroke-width: 1.8; stroke-dasharray: 6 5; }
+    .kbd-scrape { fill: none; stroke: var(--accent, #007a52); stroke-width: 2; stroke-dasharray: 6 5; }
+    .dark .kbd-pipe { fill: rgba(129, 140, 248, 0.14); stroke: #818cf8; }
+    .dark .kbd-tp { fill: #a5b4fc; }
+    .dark .kbd-otlp { stroke: #818cf8; }
   </style>
   <defs>
-    <marker id="kof-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted, #5a5f68)"/></marker>
-    <marker id="kof-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--primary, #111418)"/></marker>
-    <marker id="kof-ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6366f1"/></marker>
-    <marker id="kof-ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--accent, #007a52)"/></marker>
+    <marker id="kbd-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted, #5a5f68)"/></marker>
+    <marker id="kbd-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--primary, #111418)"/></marker>
+    <marker id="kbd-ap" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6366f1"/></marker>
+    <marker id="kbd-ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--accent, #007a52)"/></marker>
   </defs>
 
-  <rect class="kof-bg" x="0" y="0" width="1220" height="930" rx="16"/>
+  <rect class="kbd-bg" x="0" y="0" width="1220" height="930" rx="16"/>
 
   <!-- Request path: client -> data plane -> upstream -->
-  <rect class="kof-box" x="30" y="55" width="220" height="96" rx="14"/>
-  <text class="kof-t" x="140" y="96">Client</text>
-  <text class="kof-s" x="140" y="124">app or agent</text>
+  <rect class="kbd-box" x="30" y="55" width="220" height="96" rx="14"/>
+  <text class="kbd-t" x="140" y="96">Client</text>
+  <text class="kbd-s" x="140" y="124">app or agent</text>
 
-  <rect class="kof-box" x="970" y="55" width="220" height="96" rx="14"/>
-  <text class="kof-t" x="1080" y="96">Upstream</text>
-  <text class="kof-s" x="1080" y="124">backend API</text>
+  <rect class="kbd-box" x="970" y="55" width="220" height="96" rx="14"/>
+  <text class="kbd-t" x="1080" y="96">Upstream</text>
+  <text class="kbd-s" x="1080" y="124">backend API</text>
 
-  <path class="kof-req" d="M250,103 L298,103" marker-end="url(#kof-ar)"/>
-  <path class="kof-req" d="M920,103 L968,103" marker-end="url(#kof-ar)"/>
+  <path class="kbd-req" d="M250,103 L298,103" marker-end="url(#kbd-ar)"/>
+  <path class="kbd-req" d="M920,103 L968,103" marker-end="url(#kbd-ar)"/>
 
   <!-- Kong data plane -->
-  <rect class="kof-dp" x="300" y="30" width="620" height="330" rx="22"/>
-  <text class="kof-ta" x="610" y="72">Kong Gateway data plane</text>
-  <text class="kof-s" x="610" y="100">proxies every API request</text>
+  <rect class="kbd-dp" x="300" y="30" width="620" height="330" rx="22"/>
+  <text class="kbd-ta" x="610" y="72">Kong Gateway data plane</text>
+  <text class="kbd-s" x="610" y="100">proxies every API request</text>
 
-  <rect class="kof-box" x="330" y="122" width="560" height="62" rx="12"/>
-  <text class="kof-s" x="610" y="160" style="fill: var(--primary, #111418)">route · run plugins · call upstream</text>
+  <rect class="kbd-box" x="330" y="122" width="560" height="62" rx="12"/>
+  <text class="kbd-s" x="610" y="160" style="fill: var(--primary, #111418)">route · run plugins · call upstream</text>
 
-  <rect class="kof-plugin" x="330" y="210" width="265" height="118" rx="14"/>
-  <text class="kof-t" x="462" y="256">Prometheus plugin</text>
-  <text class="kof-s" x="462" y="286">metrics on the</text>
-  <text class="kof-s" x="462" y="309">Status API :8100</text>
+  <rect class="kbd-plugin" x="330" y="210" width="265" height="118" rx="14"/>
+  <text class="kbd-t" x="462" y="256">Prometheus plugin</text>
+  <text class="kbd-s" x="462" y="286">metrics on the</text>
+  <text class="kbd-s" x="462" y="309">Status API :8100</text>
 
-  <rect class="kof-plugin" x="625" y="210" width="265" height="118" rx="14"/>
-  <text class="kof-t" x="757" y="256">OpenTelemetry plugin</text>
-  <text class="kof-s" x="757" y="286">traces +</text>
-  <text class="kof-s" x="757" y="309">access logs</text>
+  <rect class="kbd-plugin" x="625" y="210" width="265" height="118" rx="14"/>
+  <text class="kbd-t" x="757" y="256">OpenTelemetry plugin</text>
+  <text class="kbd-s" x="757" y="286">traces +</text>
+  <text class="kbd-s" x="757" y="309">access logs</text>
 
   <!-- Konnect: config only, off the request path -->
-  <rect class="kof-cp" x="970" y="230" width="220" height="96" rx="14"/>
-  <text class="kof-t" x="1080" y="271">Konnect</text>
-  <text class="kof-s" x="1080" y="299">config only</text>
-  <path class="kof-dash" d="M968,278 L922,278" marker-end="url(#kof-a)"/>
+  <rect class="kbd-cp" x="970" y="230" width="220" height="96" rx="14"/>
+  <text class="kbd-t" x="1080" y="271">Konnect</text>
+  <text class="kbd-s" x="1080" y="299">config only</text>
+  <path class="kbd-dash" d="M968,278 L922,278" marker-end="url(#kbd-a)"/>
 
   <!-- Collect row -->
-  <rect class="kof-pipe" x="600" y="455" width="315" height="96" rx="14"/>
-  <text class="kof-tp" x="757" y="496">OpenTelemetry Collector</text>
-  <text class="kof-s" x="757" y="524">receive · sample · export</text>
+  <rect class="kbd-pipe" x="600" y="455" width="315" height="96" rx="14"/>
+  <text class="kbd-tp" x="757" y="496">OpenTelemetry Collector</text>
+  <text class="kbd-s" x="757" y="524">receive · sample · export</text>
 
-  <rect class="kof-pipe" x="970" y="455" width="220" height="96" rx="14"/>
-  <text class="kof-tp" x="1080" y="496">Grafana Alloy</text>
-  <text class="kof-s" x="1080" y="524">container logs</text>
+  <rect class="kbd-pipe" x="970" y="455" width="220" height="96" rx="14"/>
+  <text class="kbd-tp" x="1080" y="496">Grafana Alloy</text>
+  <text class="kbd-s" x="1080" y="524">container logs</text>
 
   <!-- OTLP push -->
-  <path class="kof-otlp" d="M757,330 L757,452" marker-end="url(#kof-ap)"/>
-  <text class="kof-l" x="770" y="398">OTLP push</text>
+  <path class="kbd-otlp" d="M757,330 L757,452" marker-end="url(#kbd-ap)"/>
+  <text class="kbd-l" x="770" y="398">OTLP push</text>
 
   <!-- pod stdout/stderr read by Alloy via the Kubernetes API -->
-  <path class="kof-dash" d="M905,362 L905,405 L1080,405 L1080,452" marker-end="url(#kof-a)"/>
-  <text class="kof-l" x="992" y="396" text-anchor="middle">pod stdout / stderr</text>
+  <path class="kbd-dash" d="M905,362 L905,405 L1080,405 L1080,452" marker-end="url(#kbd-a)"/>
+  <text class="kbd-l" x="992" y="396" text-anchor="middle">pod stdout / stderr</text>
 
   <!-- Store row -->
-  <rect class="kof-box" x="330" y="650" width="265" height="96" rx="14"/>
-  <text class="kof-t" x="462" y="691">Metrics</text>
-  <text class="kof-s" x="462" y="719">Prometheus</text>
+  <rect class="kbd-box" x="330" y="650" width="265" height="96" rx="14"/>
+  <text class="kbd-t" x="462" y="691">Metrics</text>
+  <text class="kbd-s" x="462" y="719">Prometheus</text>
 
-  <rect class="kof-box" x="625" y="650" width="265" height="96" rx="14"/>
-  <text class="kof-t" x="757" y="691">Traces</text>
-  <text class="kof-s" x="757" y="719">Tempo</text>
+  <rect class="kbd-box" x="625" y="650" width="265" height="96" rx="14"/>
+  <text class="kbd-t" x="757" y="691">Traces</text>
+  <text class="kbd-s" x="757" y="719">Tempo</text>
 
-  <rect class="kof-box" x="935" y="650" width="255" height="96" rx="14"/>
-  <text class="kof-t" x="1062" y="691">Logs</text>
-  <text class="kof-s" x="1062" y="719">Loki</text>
+  <rect class="kbd-box" x="935" y="650" width="255" height="96" rx="14"/>
+  <text class="kbd-t" x="1062" y="691">Logs</text>
+  <text class="kbd-s" x="1062" y="719">Loki</text>
 
   <!-- Prometheus pulls: dashed, arrow points at the plugin it scrapes -->
-  <path class="kof-scrape" d="M462,648 L462,333" marker-end="url(#kof-ag)"/>
-  <text class="kof-l" x="450" y="500" text-anchor="end">scrape /metrics</text>
+  <path class="kbd-scrape" d="M462,648 L462,333" marker-end="url(#kbd-ag)"/>
+  <text class="kbd-l" x="450" y="500" text-anchor="end">scrape /metrics</text>
 
   <!-- Collector -> Tempo, Collector -> Loki; Alloy -> Loki -->
-  <path class="kof-line" d="M757,553 L757,647" marker-end="url(#kof-a)"/>
-  <text class="kof-l" x="770" y="606">traces</text>
-  <path class="kof-line" d="M860,553 L860,600 L1010,600 L1010,647" marker-end="url(#kof-a)"/>
-  <text class="kof-l" x="870" y="592">access logs</text>
-  <path class="kof-line" d="M1120,553 L1120,647" marker-end="url(#kof-a)"/>
+  <path class="kbd-line" d="M757,553 L757,647" marker-end="url(#kbd-a)"/>
+  <text class="kbd-l" x="770" y="606">traces</text>
+  <path class="kbd-line" d="M860,553 L860,600 L1010,600 L1010,647" marker-end="url(#kbd-a)"/>
+  <text class="kbd-l" x="870" y="592">access logs</text>
+  <path class="kbd-line" d="M1120,553 L1120,647" marker-end="url(#kbd-a)"/>
 
   <!-- Grafana -->
-  <rect class="kof-pipe" x="490" y="820" width="420" height="86" rx="14"/>
-  <text class="kof-tp" x="700" y="858">Grafana</text>
-  <text class="kof-s" x="700" y="885">Kong dashboard · logs ↔ traces</text>
+  <rect class="kbd-pipe" x="490" y="820" width="420" height="86" rx="14"/>
+  <text class="kbd-tp" x="700" y="858">Grafana</text>
+  <text class="kbd-s" x="700" y="885">Kong dashboard · logs ↔ traces</text>
 
-  <path class="kof-line" d="M462,748 L462,785 L590,785 L590,817" marker-end="url(#kof-a)"/>
-  <path class="kof-line" d="M757,748 L757,817" marker-end="url(#kof-a)"/>
-  <path class="kof-line" d="M1062,748 L1062,785 L820,785 L820,817" marker-end="url(#kof-a)"/>
+  <path class="kbd-line" d="M462,748 L462,785 L590,785 L590,817" marker-end="url(#kbd-a)"/>
+  <path class="kbd-line" d="M757,748 L757,817" marker-end="url(#kbd-a)"/>
+  <path class="kbd-line" d="M1062,748 L1062,785 L820,785 L820,817" marker-end="url(#kbd-a)"/>
 </svg>

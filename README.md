@@ -8,51 +8,7 @@ When errors climb on a Kong route, a metric tells you *that* something broke. To
 - **Traces and access logs:** the `opentelemetry` plugin sends both over OTLP to an OpenTelemetry Collector, which stores them in Tempo and Loki. Each log line links to its trace, and back.
 - **Container logs:** Grafana Alloy ships the Kong pods' stdout and stderr to Loki, for startup errors and crashes.
 
-```mermaid
-flowchart TB
-  client(["API client"])
-  subgraph kong["Kong Gateway data plane"]
-    direction LR
-    proxy["proxy"]
-    promplugin["prometheus plugin"]
-    otelplugin["opentelemetry plugin"]
-    stdout["container stdout / stderr"]
-  end
-  upstream(["Upstream API"])
-  konnect["Konnect control plane"]
-  collector["OpenTelemetry Collector"]
-  alloy["Grafana Alloy"]
-  subgraph store["Store"]
-    direction LR
-    prometheus[("Prometheus")]
-    tempo[("Tempo")]
-    loki[("Loki")]
-  end
-  grafana["Grafana: Kong dashboard, logs ↔ traces"]
-  client == "API request" ==> proxy
-  proxy == "API request" ==> upstream
-  kong -. "pulls config" .-> konnect
-  promplugin -- "scrape /metrics" --> prometheus
-  otelplugin -- "OTLP traces + access logs" --> collector
-  stdout -- "Kubernetes API" --> alloy
-  collector -- "traces" --> tempo
-  collector -- "access logs" --> loki
-  alloy -- "container logs" --> loki
-  prometheus --> grafana
-  tempo --> grafana
-  loki --> grafana
-
-  classDef kongnode fill:#e6fff5,stroke:#00a86b,color:#0b2e20
-  classDef pipe fill:#eef2ff,stroke:#5b6bd6,color:#1e255e
-  classDef db fill:#fff7e6,stroke:#d9a400,color:#4a3600
-  classDef ui fill:#fdeeee,stroke:#d9534f,color:#4a1514
-  classDef cp fill:#f5f5f5,stroke:#888,color:#222,stroke-dasharray:4 3
-  class proxy,promplugin,otelplugin,stdout kongnode
-  class collector,alloy pipe
-  class prometheus,tempo,loki db
-  class grafana ui
-  class konnect cp
-```
+![API requests go from the client through the Kong data plane to the upstream. Prometheus scrapes the Prometheus plugin, the OpenTelemetry plugin pushes traces and access logs to the Collector, Alloy ships container logs, and Grafana reads all three stores. Konnect only sends configuration.](docs/architecture.svg)
 
 Everything runs on a kind cluster, with every chart and image pinned.
 

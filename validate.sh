@@ -12,11 +12,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-kubectl -n "$MON_NS" run "$POD" --restart=Never --image=curlimages/curl --command -- sleep 300 >/dev/null 2>&1
+kubectl -n "$MON_NS" run "$POD" --restart=Never --image=curlimages/curl:8.23.0 --command -- sleep 300 >/dev/null 2>&1
 kubectl -n "$MON_NS" wait --for=condition=ready pod/"$POD" --timeout=30s >/dev/null 2>&1
 
 kexec() { kubectl -n "$MON_NS" exec "$POD" -- "$@" 2>/dev/null; }
 
+# Signals take a few seconds to land (traces wait ~10 s in the Collector's
+# tail-sampling buffer), so retry for up to ~2 minutes before failing.
+checks() {
 echo "=== TRACES (Tempo) ==="
 TRACE_RESULT=$(kexec curl -s --retry 3 --retry-delay 2 "http://tempo.$MON_NS.svc.cluster.local:3200/api/search?tags=service.name%3Dkong-gateway&limit=5")
 echo "$TRACE_RESULT" | python3 -c "
@@ -85,3 +88,13 @@ for t in d['data']['activeTargets']:
 if not found:
     print('  ABSENT - no kong-related target registered at all (this is the silent-failure symptom when the ServiceMonitor release label is missing)')
 "
+}
+
+for attempt in 1 2 3 4 5 6 7 8; do
+  out=$(checks)
+  if ! grep -qE 'FAIL|ABSENT' <<<"$out"; then
+    echo "$out"; echo; echo "All signals arrived."; exit 0
+  fi
+  [ "$attempt" -lt 8 ] && { echo "Not everything has arrived yet, retrying in 15s ($attempt/8)..."; sleep 15; }
+done
+echo "$out"; echo; echo "Some signals are missing (see FAIL/ABSENT above)."; exit 1

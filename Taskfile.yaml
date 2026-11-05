@@ -48,7 +48,6 @@ tasks:
     desc: "Send traffic, then check that metrics, traces and both log streams arrived"
     cmds:
       - task: generate-traffic
-      - echo "Waiting 20s for the signals to land..." && sleep 20
       - bash validate.sh {{.MON_NS}}
       - task: urls
 

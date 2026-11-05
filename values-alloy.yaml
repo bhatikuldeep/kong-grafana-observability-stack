@@ -1,13 +1,13 @@
-# Grafana Alloy — DaemonSet tailing Kong's pod stdout/stderr (nginx access
+# Grafana Alloy - DaemonSet tailing Kong's pod stdout/stderr (nginx access
 # and error logs written to the container's own log stream, separate from
 # the structured OTLP access logs the opentelemetry plugin sends directly
 # to the Collector) into Loki, as {namespace="kong"}.
 #
 # Uses loki.source.kubernetes (current recommended approach) rather than
-# the older loki.source.file + hostPath mount pattern — it tails via the
+# the older loki.source.file + hostPath mount pattern - it tails via the
 # Kubernetes API directly, so no privileged container or /var/log/pods
 # mount is needed. discovery.kubernetes is scoped to this node only
-# (spec.nodeName), matching Grafana's own DaemonSet tutorial pattern —
+# (spec.nodeName), matching Grafana's own DaemonSet tutorial pattern -
 # without that scoping every Alloy pod would watch every pod cluster-wide.
 alloy:
   configMap:
@@ -72,7 +72,7 @@ alloy:
 controller:
   type: daemonset
 
-# Default — grants the pods/pods-log/namespaces get/list/watch permissions
+# Default - grants the pods/pods-log/namespaces get/list/watch permissions
 # loki.source.kubernetes needs. No manual RBAC edits required.
 rbac:
   create: true

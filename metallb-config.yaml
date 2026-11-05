@@ -1,6 +1,7 @@
-# NOTE: if you run multiple kind clusters on the same machine, they share
-# the same Docker "kind" bridge network. If LoadBalancer IPs collide with
-# another cluster's pool, change the address range below to a free block.
+# Rendered by `task up`: ${METALLB_RANGE} is a block near the top of the
+# Docker "kind" network's IPv4 subnet (for 192.168.107.0/24: .200-.230), so
+# LoadBalancer IPs sit on the same network as the kind node. To pick another
+# block (another kind cluster's pool uses it), set METALLB_RANGE in .env.
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
 metadata:
@@ -8,7 +9,7 @@ metadata:
   namespace: metallb-system
 spec:
   addresses:
-    - 192.168.156.100-192.168.156.130
+    - ${METALLB_RANGE}
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement

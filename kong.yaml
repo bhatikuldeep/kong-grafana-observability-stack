@@ -10,7 +10,7 @@ services:
         strip_path: true
 
 plugins:
-  # ---- Metrics — scraped from the DP Status API by Prometheus ----
+  # ---- Metrics - scraped from the DP Status API by Prometheus ----
   - name: prometheus
     config:
       status_code_metrics: true
@@ -19,9 +19,9 @@ plugins:
       upstream_health_metrics: true
       per_consumer: false
 
-  # ---- Traces + access logs — OTLP/HTTP to the in-cluster OTel Collector ----
+  # ---- Traces + access logs - OTLP/HTTP to the in-cluster OTel Collector ----
   # One plugin does both. access_logs.endpoint requires Kong Gateway 3.14+
-  # (the flat access_logs_endpoint field works from 3.13+) — see README.md
+  # (the flat access_logs_endpoint field works from 3.13+) - see README.md
   # "Kong Gateway version requirement" for details.
   - name: opentelemetry
     config:

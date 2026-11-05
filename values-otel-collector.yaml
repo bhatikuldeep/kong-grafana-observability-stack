@@ -1,4 +1,4 @@
-# OTel Collector — terminates Kong's OTLP/HTTP on :4318, tail-samples traces
+# OTel Collector - terminates Kong's OTLP/HTTP on :4318, tail-samples traces
 # into Tempo, forwards access logs to Loki's native OTLP ingest. The
 # -contrib image is required for the tail_sampling processor.
 mode: deployment
@@ -7,7 +7,7 @@ image:
 
 config:
   extensions:
-    # Mandatory per current chart — removing it fails liveness/readiness probes.
+    # Mandatory per current chart - removing it fails liveness/readiness probes.
     health_check:
       endpoint: ${env:MY_POD_IP}:13133
 
@@ -18,7 +18,7 @@ config:
           endpoint: 0.0.0.0:4318
         grpc:
           endpoint: 0.0.0.0:4317
-    # Chart default adds a `prometheus` self-scrape receiver on :8888 — not
+    # Chart default adds a `prometheus` self-scrape receiver on :8888 - not
     # wired into any pipeline here (service.pipelines only lists otlp).
 
   processors:
@@ -31,7 +31,7 @@ config:
       send_batch_size: 1024
     # Keep every error/slow trace; sample the baseline at 100% so every
     # log's "View trace" link resolves. In production, lower the baseline
-    # sampling percentage to reduce storage cost — accept that some trace
+    # sampling percentage to reduce storage cost - accept that some trace
     # links won't resolve in exchange for lower Tempo ingest volume.
     tail_sampling:
       decision_wait: 10s

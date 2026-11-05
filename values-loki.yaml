@@ -1,12 +1,12 @@
-# Loki — native OTLP log ingest (otlphttp/loki -> .../otlp/v1/logs from the
+# Loki - native OTLP log ingest (otlphttp/loki -> .../otlp/v1/logs from the
 # OTel Collector).
 #
-# ⚠️ FOR TESTING/DEMO ONLY — NOT PRODUCTION CONFIG. This uses useTestSchema
+# ⚠️ FOR TESTING/DEMO ONLY - NOT PRODUCTION CONFIG. This uses useTestSchema
 # (the chart's own testing shortcut, per its values.yaml comment: "for
 # testing or playing around") instead of a real schemaConfig. A production
 # Loki install MUST define its own explicit schemaConfig (store, object_store,
-# retention period, index prefix) — see
-# https://grafana.com/docs/loki/latest/configuration/#schema_config — and
+# retention period, index prefix) - see
+# https://grafana.com/docs/loki/latest/configuration/#schema_config - and
 # almost certainly a real object storage backend (S3/GCS/Azure), not
 # filesystem. Don't copy this file as-is into a production values.yaml.
 #
@@ -14,7 +14,7 @@
 # without an explicit replacement list. Loki's OTLP endpoint requires every
 # log stream to have at least one label, and Loki's built-in default list
 # already promotes service.name (which kong.yaml sets via
-# resource_attributes.service.name) — overriding it with no replacement
+# resource_attributes.service.name) - overriding it with no replacement
 # causes every log stream to arrive with zero labels, and Loki rejects them
 # with HTTP 400 "at least one label pair is required per stream". Leaving
 # otlp_config unset (as below) uses the built-in defaults and works.
@@ -24,7 +24,7 @@ loki:
     replication_factor: 1
   storage:
     type: filesystem
-  useTestSchema: true   # ⚠️ testing/demo shortcut — see warning above, not for production
+  useTestSchema: true   # ⚠️ testing/demo shortcut - see warning above, not for production
 
 deploymentMode: SingleBinary
 

@@ -8,7 +8,7 @@ When errors climb on a Kong route, a metric tells you *that* something broke. To
 - **Traces and access logs:** the `opentelemetry` plugin sends both over OTLP to an OpenTelemetry Collector, which stores them in Tempo and Loki. Each log line links to its trace, and back.
 - **Container logs:** Grafana Alloy ships the Kong pods' stdout and stderr to Loki, for startup errors and crashes.
 
-![API requests go from the client through the Kong data plane to the upstream. Prometheus scrapes the Prometheus plugin, the OpenTelemetry plugin pushes traces and access logs to the Collector, Alloy ships container logs, and Grafana reads all three stores. Konnect only sends configuration.](docs/architecture.svg)
+![API requests go from the client through the Kong data plane to the upstream. Prometheus scrapes the Prometheus plugin, the OpenTelemetry plugin pushes traces and access logs to the Collector, Alloy ships container logs, and Grafana reads all three stores.](docs/architecture.svg)
 
 Everything runs on a kind cluster, with every chart and image pinned.
 

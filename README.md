@@ -9,35 +9,31 @@ When errors climb on a Kong route, a metric tells you *that* something broke. To
 - **Container logs:** Grafana Alloy ships the Kong pods' stdout and stderr to Loki, for startup errors and crashes.
 
 ```mermaid
-flowchart LR
-  konnect["Konnect<br/>control plane"]
-
+flowchart TB
+  client(["API client"])
   subgraph kong["Kong Gateway data plane"]
-    direction TB
+    direction LR
+    proxy["proxy"]
     promplugin["prometheus plugin"]
     otelplugin["opentelemetry plugin"]
-    stdout["container<br/>stdout / stderr"]
+    stdout["container stdout / stderr"]
   end
-
-  subgraph collect["Collect"]
-    direction TB
-    collector["OpenTelemetry<br/>Collector"]
-    alloy["Grafana Alloy"]
-  end
-
+  upstream(["Upstream API"])
+  konnect["Konnect control plane"]
+  collector["OpenTelemetry Collector"]
+  alloy["Grafana Alloy"]
   subgraph store["Store"]
-    direction TB
+    direction LR
     prometheus[("Prometheus")]
     tempo[("Tempo")]
     loki[("Loki")]
   end
-
-  grafana["Grafana<br/>Kong dashboard"]
-
-  konnect -. "config" .-> kong
-  promplugin -- "scrape :8100/metrics" --> prometheus
-  otelplugin -- "OTLP traces" --> collector
-  otelplugin -- "OTLP access logs" --> collector
+  grafana["Grafana: Kong dashboard, logs ↔ traces"]
+  client == "API request" ==> proxy
+  proxy == "API request" ==> upstream
+  kong -. "pulls config" .-> konnect
+  promplugin -- "scrape /metrics" --> prometheus
+  otelplugin -- "OTLP traces + access logs" --> collector
   stdout -- "Kubernetes API" --> alloy
   collector -- "traces" --> tempo
   collector -- "access logs" --> loki
@@ -45,18 +41,17 @@ flowchart LR
   prometheus --> grafana
   tempo --> grafana
   loki --> grafana
-  loki <-. "trace_id" .-> tempo
 
   classDef kongnode fill:#e6fff5,stroke:#00a86b,color:#0b2e20
   classDef pipe fill:#eef2ff,stroke:#5b6bd6,color:#1e255e
   classDef db fill:#fff7e6,stroke:#d9a400,color:#4a3600
   classDef ui fill:#fdeeee,stroke:#d9534f,color:#4a1514
-  classDef ext fill:#f5f5f5,stroke:#888,color:#222
-  class promplugin,otelplugin,stdout kongnode
+  classDef cp fill:#f5f5f5,stroke:#888,color:#222,stroke-dasharray:4 3
+  class proxy,promplugin,otelplugin,stdout kongnode
   class collector,alloy pipe
   class prometheus,tempo,loki db
   class grafana ui
-  class konnect ext
+  class konnect cp
 ```
 
 Everything runs on a kind cluster, with every chart and image pinned.

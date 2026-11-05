@@ -1,4 +1,4 @@
-# Kong Gateway DP values for Konnect hybrid mode. Template — rendered into
+# Kong Gateway DP values for Konnect hybrid mode. Template - rendered into
 # values-dp.yaml (gitignored, contains real hostnames) by konnect-setup.sh
 # via envsubst, using values from .env.
 image:
@@ -57,11 +57,16 @@ status:
     enabled: true
     containerPort: 8100
 
-# ServiceMonitor — the release label MUST match the kube-prometheus-stack
+# ServiceMonitor - the release label MUST match the kube-prometheus-stack
 # Helm release name, or Prometheus will silently ignore this ServiceMonitor.
 serviceMonitor:
   enabled: true
   interval: 15s
+  # Keep Kong's own `service` label (the Kong service name). Without this,
+  # Prometheus overwrites it with the Kubernetes Service name and renames
+  # Kong's to `exported_service`, so the official dashboard's per-service
+  # panels show "kong-kong-proxy" for every service.
+  honorLabels: true
   labels:
     release: kube-prometheus-stack
 

@@ -1,8 +1,8 @@
-# kube-prometheus-stack values — bundles Prometheus + Grafana + the
+# kube-prometheus-stack values - bundles Prometheus + Grafana + the
 # Prometheus Operator, plus Grafana datasources for trace/log correlation.
 #
 # IMPORTANT: this Helm release MUST be named "kube-prometheus-stack" (see
-# Taskfile.yaml's MON_RELEASE var) — the Kong Gateway chart's ServiceMonitor
+# Taskfile.yaml's MON_RELEASE var) - the Kong Gateway chart's ServiceMonitor
 # sets label release: kube-prometheus-stack, and Prometheus only watches
 # ServiceMonitors carrying that exact label.
 
@@ -22,6 +22,26 @@ alertmanager:
 grafana:
   service:
     type: LoadBalancer
+  # Kong's official dashboard for the prometheus plugin (grafana.com 7424),
+  # downloaded at install time into a "Kong" folder.
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: kong
+          orgId: 1
+          folder: Kong
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/kong
+  dashboards:
+    kong:
+      kong-official:
+        gnetId: 7424
+        revision: 11
+        datasource: Prometheus
   additionalDataSources:
     - name: Loki
       type: loki
@@ -30,10 +50,10 @@ grafana:
       url: http://loki-gateway.observability.svc.cluster.local
       jsonData:
         # Loki → Tempo: trace_id is OTLP structured metadata, matched as a label.
-        # NOTE: $${...} (double dollar) is required here, not ${...} — Helm's
-        # chart templating consumes a single $, and the literal Grafana
-        # template variable never reaches Grafana. A single $ silently
-        # renders this as an empty string instead of the trace ID.
+        # NOTE: $${...} (double dollar) is required here, not ${...}. Grafana
+        # expands $VAR and ${VAR} in provisioning files as environment
+        # variables, so a single $ becomes an empty string and the link loses
+        # its trace ID. $$ is Grafana's escape for a literal $.
         derivedFields:
           - name: trace_id
             matcherType: label
@@ -48,7 +68,7 @@ grafana:
       url: http://tempo.observability.svc.cluster.local:3200
       jsonData:
         # Tempo → Loki: find the access-log line(s) for a span by trace id.
-        # Same $${...} escaping requirement as above.
+        # Same $$ escaping as above.
         tracesToLogsV2:
           datasourceUid: loki
           spanStartTimeShift: '-1h'

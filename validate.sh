@@ -39,7 +39,7 @@ import json,sys
 try:
     d = json.load(sys.stdin)
     results = d.get('data', {}).get('result', [])
-    print(f'PASS: found {len(results)} log stream(s) for service_name=kong-gateway' if results else 'FAIL: no logs found — response: ' + json.dumps(d)[:400])
+    print(f'PASS: found {len(results)} log stream(s) for service_name=kong-gateway' if results else 'FAIL: no logs found - response: ' + json.dumps(d)[:400])
 except Exception as e:
     print(f'FAIL: could not parse Loki response ({e})')
 "
@@ -54,7 +54,7 @@ import json,sys
 try:
     d = json.load(sys.stdin)
     results = d.get('data', {}).get('result', [])
-    print(f'PASS: found {len(results)} log stream(s) for namespace=kong' if results else 'FAIL: no logs found — response: ' + json.dumps(d)[:400])
+    print(f'PASS: found {len(results)} log stream(s) for namespace=kong' if results else 'FAIL: no logs found - response: ' + json.dumps(d)[:400])
 except Exception as e:
     print(f'FAIL: could not parse Loki response ({e})')
 "
@@ -83,5 +83,5 @@ for t in d['data']['activeTargets']:
         found = True
         print(f\"  {t['labels']['job']}  {t['scrapeUrl']}  health={t['health']}  lastError={t.get('lastError','')}\")
 if not found:
-    print('  ABSENT — no kong-related target registered at all (this is the silent-failure symptom when the ServiceMonitor release label is missing)')
+    print('  ABSENT - no kong-related target registered at all (this is the silent-failure symptom when the ServiceMonitor release label is missing)')
 "

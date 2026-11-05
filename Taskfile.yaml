@@ -6,20 +6,19 @@ vars:
   MON_NS: observability
   KONG_RELEASE: kong
   KONG_SERVICEMONITOR: kong-kong        # Kong chart names its ServiceMonitor
-                                        # "<release>-<chart>" — not just the release name
-  MON_RELEASE: kube-prometheus-stack    # name MUST be this — Prometheus only watches
+                                        # "<release>-<chart>" - not just the release name
+  MON_RELEASE: kube-prometheus-stack    # name MUST be this - Prometheus only watches
                                         # ServiceMonitors with label release: kube-prometheus-stack
 
-  # ── Pinned chart versions (confirmed latest as of 2026-08-14 — see README's
-  # "Pinned versions" section). Every helm install below uses --version
+  # ── Pinned chart versions (latest as of 2026-11-05, see README "What gets installed"). Every helm install below uses --version
   # explicitly so this stack behaves identically today and a month from now,
   # instead of silently picking up whatever's newest in each repo at run time.
-  KUBE_PROMETHEUS_STACK_CHART_VERSION: 88.3.0   # deploys Grafana 13.1.3, Prometheus Operator v0.93.0
-  LOKI_CHART_VERSION: 7.3.0                     # Loki 3.6.12
+  KUBE_PROMETHEUS_STACK_CHART_VERSION: 92.21.1   # Prometheus 3.16.0, Grafana 13.3.0, Operator v0.94.2
+  LOKI_CHART_VERSION: 7.5.0                     # Loki 3.6.11
   TEMPO_CHART_VERSION: 1.24.4                   # Tempo 2.9.0
-  OTEL_COLLECTOR_CHART_VERSION: 0.169.0         # otelcol-contrib 0.158.0
-  ALLOY_CHART_VERSION: 1.11.1                   # Alloy v1.18.1
-  METALLB_CHART_VERSION: 0.16.1                 # MetalLB v0.16.1
+  OTEL_COLLECTOR_CHART_VERSION: 0.178.2         # otelcol-contrib 0.163.2
+  ALLOY_CHART_VERSION: 1.15.0                   # Alloy v1.21.3
+  METALLB_CHART_VERSION: 0.16.2                 # MetalLB v0.16.2
   KONG_CHART_VERSION: 3.4.1                     # Kong Gateway image pinned separately via KONG_IMAGE_TAG in .env
 
 dotenv: [".env"]
@@ -34,6 +33,7 @@ tasks:
   up:
     desc: "Bring up the full stack: cluster, Konnect CP/DP, observability, Kong config"
     cmds:
+      - task: helm-repos
       - task: cluster
       - task: metallb
       - task: prometheus-stack
@@ -59,6 +59,17 @@ tasks:
       - task: down
       - task: up
 
+  # ── Helm repos ──────────────────────────────────────────────────────
+  helm-repos:
+    desc: "Add (or refresh) the Helm repos this stack installs from"
+    cmds:
+      - helm repo add kong https://charts.konghq.com --force-update
+      - helm repo add grafana https://grafana.github.io/helm-charts --force-update
+      - helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts --force-update
+      - helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
+      - helm repo add metallb https://metallb.github.io/metallb --force-update
+      - helm repo update kong grafana open-telemetry prometheus-community metallb
+
   # ── Cluster + networking ────────────────────────────────────────────
   cluster:
     desc: "Create kind cluster and namespaces"
@@ -76,37 +87,48 @@ tasks:
       - helm upgrade --install metallb metallb/metallb -n metallb-system --create-namespace
           --version {{.METALLB_CHART_VERSION}} --wait --timeout 3m
       - kubectl -n metallb-system wait --for=condition=available --timeout=90s deployment/metallb-controller
-      - kubectl apply -f metallb-config.yaml
+      - |
+        if [ -z "${METALLB_RANGE:-}" ]; then
+          METALLB_RANGE=$(docker network inspect kind --format json | python3 -c '
+        import ipaddress, json, sys
+        nets = [ipaddress.ip_network(c["Subnet"]) for c in json.load(sys.stdin)[0]["IPAM"]["Config"]]
+        n = next(n for n in nets if n.version == 4)
+        top = int(n.broadcast_address)
+        print(f"{ipaddress.ip_address(top - 55)}-{ipaddress.ip_address(top - 25)}")')
+        fi
+        echo "MetalLB pool: ${METALLB_RANGE}"
+        export METALLB_RANGE
+        envsubst '${METALLB_RANGE}' < metallb-config.yaml | kubectl apply -f -
 
   # ── Observability stack ─────────────────────────────────────────────
   prometheus-stack:
-    desc: "kube-prometheus-stack (Prometheus + Grafana + Operator) — release name MUST match MON_RELEASE"
+    desc: "kube-prometheus-stack (Prometheus + Grafana + Operator) - release name MUST match MON_RELEASE"
     cmds:
       - helm upgrade --install {{.MON_RELEASE}} prometheus-community/kube-prometheus-stack
           -n {{.MON_NS}} -f values-prometheus-stack.yaml
           --version {{.KUBE_PROMETHEUS_STACK_CHART_VERSION}} --wait --timeout 5m
 
   loki:
-    desc: "Loki — log store, native OTLP ingest"
+    desc: "Loki - log store, native OTLP ingest"
     cmds:
       - helm upgrade --install loki grafana/loki -n {{.MON_NS}} -f values-loki.yaml
           --version {{.LOKI_CHART_VERSION}} --wait --timeout 5m
 
   tempo:
-    desc: "Tempo — trace store"
+    desc: "Tempo - trace store"
     cmds:
       - helm upgrade --install tempo grafana/tempo -n {{.MON_NS}} -f values-tempo.yaml
           --version {{.TEMPO_CHART_VERSION}} --wait --timeout 5m
 
   otel-collector:
-    desc: "OTel Collector — Kong's OTLP traces+logs land here, tail-sampled to Tempo, forwarded to Loki"
+    desc: "OTel Collector - Kong's OTLP traces+logs land here, tail-sampled to Tempo, forwarded to Loki"
     cmds:
       - helm upgrade --install otel-collector open-telemetry/opentelemetry-collector
           -n {{.MON_NS}} -f values-otel-collector.yaml
           --version {{.OTEL_COLLECTOR_CHART_VERSION}} --wait --timeout 5m
 
   alloy:
-    desc: "Grafana Alloy — DaemonSet tailing Kong's raw pod stdout/stderr into Loki as {namespace=\"kong\"}"
+    desc: "Grafana Alloy - DaemonSet tailing Kong's raw pod stdout/stderr into Loki as {namespace=\"kong\"}"
     cmds:
       - helm upgrade --install alloy grafana/alloy -n {{.MON_NS}} -f values-alloy.yaml
           --version {{.ALLOY_CHART_VERSION}} --wait --timeout 5m
@@ -179,11 +201,14 @@ tasks:
 
   # ── Traffic + validation ────────────────────────────────────────────
   generate-traffic:
-    desc: "Send test traffic through the DP's proxy Service (direct MetalLB IP, no port-forward)"
+    desc: "Send test traffic to the DP's proxy LoadBalancer IP, from the kind node (works even when the host can't route to MetalLB IPs)"
     cmds:
       - |
         PROXY_IP=$(kubectl -n {{.KONG_NS}} get svc {{.KONG_RELEASE}}-kong-proxy -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-        for i in $(seq 1 10); do curl -sk -o /dev/null -w "%{http_code} " "https://${PROXY_IP}/mock/anything"; sleep 0.3; done
+        for i in $(seq 1 10); do
+          docker exec {{.CLUSTER}}-control-plane curl -sk -o /dev/null -w "%{http_code} " "https://${PROXY_IP}/mock/anything"
+          sleep 0.3
+        done
         echo
 
   validate:
@@ -213,12 +238,12 @@ tasks:
       - 'echo "--- konnect DP status ---"'
       - task: konnect-nodes
 
-  # ── Diagnosis helpers — reproduce the missing-metrics symptom on demand ──
+  # ── Diagnosis helpers - reproduce the missing-metrics symptom on demand ──
   break-servicemonitor-label:
-    desc: "Remove the release label from Kong's ServiceMonitor — reproduces the missing-metrics symptom"
+    desc: "Remove the release label from Kong's ServiceMonitor - reproduces the missing-metrics symptom"
     cmds:
       - kubectl -n {{.KONG_NS}} label servicemonitor {{.KONG_SERVICEMONITOR}} release-
-      - echo "Label removed. Run 'task validate' — metrics target should now be ABSENT."
+      - echo "Label removed. Run 'task validate' - metrics target should now be ABSENT."
 
   fix-servicemonitor-label:
     desc: "Restore the release label (durable fix belongs in values-dp.yaml's serviceMonitor.labels)"
